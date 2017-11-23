@@ -22,9 +22,19 @@
 #define DNS_HEADER_SIZE 12
 
 char ip[100][16];
-char hostname[100][128];
+char hostnames[100][128];
+int hostname_count = 0;
 
-
+void append_www(char *hostname) {
+	if (strncmp("www.", hostname, 4) == 0) {
+		return;
+	} else {
+		char w[128] = "www.";
+		strcat(w, hostname);
+		hostname = w;
+		fprintf(stderr, "append: %s %s\n", w, hostname);
+	}
+}
 
 void readHostnameFile(char *filename) {
 	int i = 0;
@@ -39,14 +49,31 @@ void readHostnameFile(char *filename) {
 			while (token) {
 				strcpy (ip[i], token);
 				token = strtok(NULL, " ");
-				strcpy(hostname[i],token);
+				append_www(token);
+				strcpy(hostnames[i],token);
 				token = strtok(NULL, " ");
-				fprintf(stderr, "%s %s", ip[i], hostname[i]);
+				fprintf(stderr, "%s %s", ip[i], hostnames[i]);
+				hostname_count += 1;
 				i++;
 			}
 		}
 	}
 	fclose(fd);
+}
+
+int check_hostnames(char *hostname) {
+	int i = 0;	
+	if (hostname_count > 0) {
+		for (i = 0; i < hostname_count; i++) {
+			if (strcmp(hostnames[i], hostname) == 0) {
+				break;
+			}
+		}
+	}
+	if (i == hostname_count)
+		return -1;
+	else
+		return i;
 }
 
 void handler(u_char *usrarg, const struct pcap_pkthdr* pkthdr, const u_char *packet) {
@@ -91,6 +118,11 @@ void handler(u_char *usrarg, const struct pcap_pkthdr* pkthdr, const u_char *pac
 	if (type != T_A) {
 		return;
 	}
+
+	int i = check_hostnames(hostname);
+	
+
+
 
 }
 
