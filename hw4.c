@@ -24,15 +24,17 @@
 char ip[100][16];
 char hostnames[100][128];
 int hostname_count = 0;
+char *interface = NULL;
 
-void append_www(char *hostname) {
+char* append_www(char *hostname) {
 	if (strncmp("www.", hostname, 4) == 0) {
-		return;
+		return hostname;
 	} else {
 		char w[128] = "www.";
 		strcat(w, hostname);
 		hostname = w;
-		fprintf(stderr, "append: %s %s\n", w, hostname);
+		fprintf(stderr, "append: %s\n",hostname);
+		return hostname;
 	}
 }
 
@@ -49,7 +51,7 @@ void readHostnameFile(char *filename) {
 			while (token) {
 				strcpy (ip[i], token);
 				token = strtok(NULL, " ");
-				append_www(token);
+				token = append_www(token);
 				strcpy(hostnames[i],token);
 				token = strtok(NULL, " ");
 				fprintf(stderr, "%s %s", ip[i], hostnames[i]);
@@ -74,6 +76,16 @@ int check_hostnames(char *hostname) {
 		return -1;
 	else
 		return i;
+}
+
+char *getLocalIP(char *interface) {
+	struct ifreq ifr;
+	int fd = socket(AF_INET, SOCK_DGRAM, 0);
+	ifr.ifr_addr.sa_family = AF_INET;
+	strncpy(ifr.ifr_name, interface, IFNAMSIZ-1);
+	ioctl(fd, SIOCGIFADDR, &ifr);
+	close(fd);
+	return inet_ntoa(((struct sockaddr_in *)&ifr.ifr_addr)->sin_addr);
 }
 
 void handler(u_char *usrarg, const struct pcap_pkthdr* pkthdr, const u_char *packet) {
@@ -118,8 +130,17 @@ void handler(u_char *usrarg, const struct pcap_pkthdr* pkthdr, const u_char *pac
 	if (type != T_A) {
 		return;
 	}
+	
+	int i;
+	char *localIP = getLocalIP(interface);
+	fprintf(stderr, "IP: %s", localIP);
 
-	int i = check_hostnames(hostname);
+	if ((i = check_hostnames(hostname)) == -1) {
+		fprintf(stderr, "No match");
+		return;
+	}
+
+
 	
 
 
@@ -129,7 +150,7 @@ void handler(u_char *usrarg, const struct pcap_pkthdr* pkthdr, const u_char *pac
 int main(int argc, char **argv) {
 
 	int param = 1;
-	char *interface = NULL, expr[256] = "", *hostname = NULL;
+	char expr[256] = "", *hostname = NULL;
 	char *dev;
 	char errbuf[PCAP_ERRBUF_SIZE];
 	pcap_t *handle;
@@ -176,9 +197,10 @@ int main(int argc, char **argv) {
 	//        } else {
 	if (interface != NULL)
 		handle = pcap_open_live(interface, 65535, 1, 1000, errbuf);
-	else
+	else {
+		interface = dev;
 		handle = pcap_open_live(dev, 65535, 1, 1000, errbuf);
-	//        }
+	}
 	if (handle == NULL) {
 		fprintf(stderr, "Couldn't open device: %s\n", errbuf);
 		return -1;
