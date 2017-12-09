@@ -49,20 +49,6 @@ u_int32_t lIP = -1;
 libnet_t *context;
 char errbuf[LIBNET_ERRBUF_SIZE];
 
-/*char* append_www(char *hostname) {
-  if (strncmp("www.", hostname, 4) == 0) {
-  hostname[strlen(hostname)-1] = '\0';
-  return hostname;
-  } else {
-  char w[128] = "www.";
-  strcat(w, hostname);
-  hostname = w;
-  hostname[strlen(w)-1] = '\0';
-  fprintf(stderr, "append: %s",hostname);
-  return hostname;
-  }
-  } */
-
 void readHostnameFile(char *filename) {
 	int i = 0;
 	char line[256];
@@ -77,11 +63,10 @@ void readHostnameFile(char *filename) {
 			while (token) {
 				strcpy (ip[i], token);
 				token = strtok(NULL, " ");
-				//token = append_www(token);
 				token[strlen(token)-1] = '\0';
 				strcpy(hostnames[i],token);
 				token = strtok(NULL, " ");
-				fprintf(stderr, "%s %s", ip[i], hostnames[i]);
+//				fprintf(stderr, "%s %s", ip[i], hostnames[i]);
 				hostname_count += 1;
 				i++;
 			}
@@ -94,7 +79,6 @@ in_addr_t check_hostnames(char *hostname) {
 	int i = 0;	
 	if (hostname_count > 0) {
 		for (i = 0; i < hostname_count; i++) {
-			//fprintf(stderr, "Search: %s %s\n", hostnames[i], hostname);
 			if (strcmp(hostnames[i], hostname) == 0) {
 				fprintf(stderr, "Found\n");	
 				return inet_addr(ip[i]);
@@ -108,15 +92,7 @@ in_addr_t check_hostnames(char *hostname) {
 }
 
 void setLocalIP(char *interface) {
-	/*	struct ifreq ifr;
-		int fd = socket(AF_INET, SOCK_DGRAM, 0);
-		ifr.ifr_addr.sa_family = AF_INET;
-		strncpy(ifr.ifr_name, interface, IFNAMSIZ-1);
-		ioctl(fd, SIOCGIFADDR, &ifr);
-		close(fd);
-		return inet_ntoa(((struct sockaddr_in *)&ifr.ifr_addr)->sin_addr);
-
-*/	
+	
 	if ((context = libnet_init(LIBNET_LINK, interface, errbuf)) == NULL) {
 		fprintf(stderr, "Libnet init failed");
 		return;
@@ -135,7 +111,6 @@ void handler(u_char *usrarg, const struct pcap_pkthdr* pkthdr, const u_char *pac
 		return;
 	}
 	const struct ip *ip = (struct ip*) (packet + SIZE_ETHERNET);
-	//u_int size_ip = (ip->ip_hl)*4;
 	if ((ip->ip_hl)*4 < 20) {
 		return;
 	}
@@ -153,48 +128,39 @@ void handler(u_char *usrarg, const struct pcap_pkthdr* pkthdr, const u_char *pac
 
 	struct dnshdr *dns;
 	dns = (struct dnshdr *) (packet + SIZE_ETHERNET + IP_HEADER_SIZE + UDP_HEADER_SIZE);
-
-	//	if (dns->opcode != QUERY) {
-	//		return;
-	//	}
-
+	if (dns->opcode != QUERY) {
+		return;
+	}
+	//fprintf(stderr, "Id: %d %d", dns->id, ntohs(dns->id));
 	char *dns_payload = (char *) (packet + SIZE_ETHERNET + IP_HEADER_SIZE + UDP_HEADER_SIZE + DNS_HEADER_SIZE);
-
-	//	fprintf(stderr, "%s\n", dns_payload);
+	int payload_size = strlen(dns_payload);
 	char hostname[128];
 	if (dn_expand((u_char *)dns, (u_char *)(packet + pkthdr->caplen), dns_payload, hostname, sizeof(hostname)) < 0) {
 		return;
 	}
-	hostname[strlen(dns_payload)-1] = '\0';
-	fprintf(stderr, "Hostname: %s\n", hostname);
-	int type = (int)*(dns_payload + strlen(dns_payload) + 2);
-	//	fprintf(stderr, "Type: %d", (int)*(dns_payload + strlen(dns_payload) + 2));
+	hostname[payload_size-1] = '\0';
+	//fprintf(stderr, "Hostname: %s\n", hostname);
+	int type = (int)*(dns_payload + payload_size + 2);
 	if (type != T_A) {
 		return;
 	}
 
 	int i;
-	//	char *localIP;
 
 	u_int32_t localIP = -1;
 	if (hostname_count == 0 || (localIP = check_hostnames(hostname)) == -1) {
-		//fprintf(stderr, "In");
-		//		localIP = getLocalIP(interface);
 		localIP = lIP;
 
 	}
-//	fprintf(stderr, "IP: %d", localIP);
 
-	//	fprintf (stderr, "%d", libnet_name2addr4(context, localIP, LIBNET_DONT_RESOLVE));
 
 	u_char response[512];
 
-	memcpy(response, dns_payload, strlen(dns_payload) + 5);	
-	memcpy(response + strlen(dns_payload) + 5,"\xc0\x0c\x00\x01\x00\x01\x00\x00\x00\x04\x00\x04", 12);
-	//	*((u_long *)(response + strlen(dns_payload) + 17)) = libnet_name2addr4(context, localIP, LIBNET_DONT_RESOLVE);
-	*((u_long *)(response + strlen(dns_payload) + 17)) = localIP;	
+	memcpy(response, dns_payload, payload_size + 5);	
+	memcpy(response + payload_size + 5,"\xc0\x0c\x00\x01\x00\x01\x00\x00\x00\x04\x00\x04", 12);
+	*((u_long *)(response + payload_size + 17)) = localIP;	
 
-	int response_size = strlen(dns_payload) + 21;
+	int response_size = payload_size + 21;
 	int packetSize = LIBNET_IPV4_H + LIBNET_UDP_H + LIBNET_DNS_H + response_size;
 
 
@@ -246,11 +212,11 @@ int main(int argc, char **argv) {
 			if (strcmp(argv[j], "-i") == 0){
 				interface = argv[j+1];
 				param += 2;
-				printf("interface found %s\n", interface);
+//				printf("interface found %s\n", interface);
 			} else if (strcmp(argv[j], "-h") == 0) {
 				param += 2;
 				hostname = argv[j+1];
-				printf("filename: %s\n",hostname);
+//				printf("filename: %s\n",hostname);
 			} 
 		} 
 		if (param < argc) {
@@ -259,7 +225,7 @@ int main(int argc, char **argv) {
 				strcat(expr, " ");
 				param += 1;
 			}
-			printf("Expression: %s\n",expr);
+//			printf("Expression: %s\n",expr);
 		}
 	}
 	if (hostname != NULL) {
@@ -276,9 +242,6 @@ int main(int argc, char **argv) {
 		net = 0;
 		mask = 0;
 	}
-	//        //if (filename != NULL) {
-	//                handle = pcap_open_offline(filename, errbuf);
-	//        } else {
 	if (interface != NULL)
 		handle = pcap_open_live(interface, 65535, 1, 1000, errbuf);
 	else {
@@ -289,10 +252,6 @@ int main(int argc, char **argv) {
 		fprintf(stderr, "Couldn't open device: %s\n", errbuf);
 		return -1;
 	}
-	//if (pcap_datalink(handle) != DLT_EN10MB) {
-	//      fprintf(stdout, "Only ethernet supported\n");
-	//      return -1;
-	//}     
 	if (expr != NULL && pcap_compile(handle, &fp, expr, 0, net) == -1){
 		fprintf(stderr, "Filter complie error %s\n", pcap_geterr(handle));
 		return -1;
@@ -303,7 +262,6 @@ int main(int argc, char **argv) {
 	}
 
 	setLocalIP(interface);
-	// pcap_loop(pcap_t*, cnt, handler,u_char *userarg)
 	pcap_loop(handle, -1, handler, hostname);
 	pcap_freecode(&fp);
 	pcap_close(handle);
