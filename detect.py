@@ -1,11 +1,5 @@
 import argparse
 import logging
-#import datetime
-from os import uname
-from subprocess import call
-from sys import argv, exit
-from time import ctime, sleep
-from pprint import pprint
 logging.getLogger("scapy.runtime").setLevel(logging.ERROR)
 from scapy.all import *
 
@@ -53,14 +47,15 @@ def handler(pkt):
 	srcPort = pkt[UDP].sport
 	if srcPort != 53:
 		return #not DNS response
+#	descPort = pkt[UDP].dport
+#	if descPort != 53:
+#		return
 	
 	destIP = pkt[IP].dst
 	destPort = pkt[UDP].dport
 
-
 	query = pkt[DNS].qd.qname
 	dnsID = pkt[DNS].id
-#	answer = pkt[DNS].qr
 	answers = checkType(pkt[DNS].an, pkt[DNS].ancount)
 
 	if len(answers) == 0:
@@ -68,7 +63,7 @@ def handler(pkt):
 	
 	tup = (dnsID, query)
 	if tup in requests and str(answers) != str(responses[tup]):
-		printAttackMsg(tup, answers,  datetime.fromtimestamp(pkt.time).strftime('%Y%m%d-%H:%M:%S'))
+		printAttackMsg(tup, answers,  datetime.fromtimestamp(pkt.time).strftime('%Y%m%d-%H:%M:%S.%f'))
 	else:
 		requests.add(tup)
 		responses[tup] = answers

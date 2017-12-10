@@ -4,7 +4,7 @@ DNSINJECT
 make
 
 2. Command to run:
-sudo ./dnsinject -h hostnames
+sudo ./dnsinject [-i interface] [-h hostnames] expression
 
 3. Design
 I parse the input and run pcap as done in HW2, then in my handler I check if the packet is not ip or udp or the source port is not 53 then I return. After the checks I fetch the dns payload and from that I parse the queried hostname. Now, if the hostname file was passed as argument then I check if the same hostname exists in the file, if it does then I use the given ip or I use my local machines ip (which I fetch using the libnet library functions). Now I start creating the spoof response in which I copy the dnspayload and the the spoofed IP. Now using libnet library functions I create the packet to inject, for that I intialise lbnet, and create the following packet in order: dns packet, udp packet, ipv4 packet, and finally I write this packet which is then sent over the interface. 
@@ -17,12 +17,12 @@ Language- C
 DNSDETECT
 
 1. Compile and Run:
-sudo python detect.py
+sudo python detect.py [-i interface] [-r tracefile] expression
 
 2. Design
 Parses the input and passes the arguments to sniff() to start capturing packets. Then in my handler function, I check if the packet is not IP or UDP I do not further process the packet, similarly also for the source port if that is not 53. Then I check the DNS answer type and create a list of answered IPs (if type is A). Then I store the dns-id and query(hostname) tuple in a list and ip list as a value in a map with key as my tuple. Then I check if the tuple already exits in the list and has different answer then I report the poisoning attack. 
 
-3. False positives: I check if the last dns-reply had the same Answer as in same IP address then I don't count that.
+3. False positives: If two legitimate responses come from the same source then they are ignored.
 
 4. OS Version
 Ubuntu 17.10
@@ -30,8 +30,15 @@ Language- Python 2.7.14
 
 5. Output:
 
-20171208-23:31:22 DNS Poisoning Attempt
-TXID 37906 Request facebook.com.
-Answer 1: ['31.13.69.228']
-Answer 2: ['172.24.26.194']
+20171209-17:39:45.365782 DNS Poisoning Attempt
+TXID 32741 Request yahoo.com.
+Answer 1: ['98.139.180.180', '98.138.252.38', '206.190.39.42']
+Answer 2: ['172.24.29.111']
+
+
+REFERENCE
+1. https://repolinux.wordpress.com/2011/09/18/libnet-1-1-tutorial/
+2. https://docs.python.org/3/library/argparse.html
+3. https://stackoverflow.com/questions/42052956/how-to-read-scapys-dns-response-to-get-the-resolved-domains-ip-address
+4. https://www.ibm.com/support/knowledgecenter/en/SSLTBW_2.2.0/com.ibm.zos.v2r2.bpxbd00/dnexp.htm
 
